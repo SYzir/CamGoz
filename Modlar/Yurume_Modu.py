@@ -9,6 +9,7 @@ class Yurume(Mod):
     def __init__(self,dogruluk):
         super().__init__()
         self.dogruluk = dogruluk
+        self.stop_signal = False #Gelecek framelerde kullanılacak döngude durdurma flag'i
         self.th = th.Thread(target=self.walk)
         self.th.start()
 
@@ -19,14 +20,23 @@ class Yurume(Mod):
         async def inner_walk():
             uri = "ws://localhost:8000/ws"
             async with WebSocket.connect(uri) as websocket:
-                while True:
-                    result = yolo.yolo_detect()
-                    await self.send_data(websocket,result)
+                print("Websocket bağlantısı kuruldı, Mod başlatıldı")
+
+                while not self.stop_signal:
+                    frame = await websocket.receive_json() # burada frontend den gelen json formattında receive edilecek
+                    result = yolo.yolo_detect(frame)
+
+                    if result:
+                        detected_object, confidence = result
+                        await self.send_data(websocket,{"detected_object ": detected_object})
+
+                    else:
+                        await self.send_data(websocket,{"detected_object ": None})
         asyncio.run(inner_walk())    
 
-    def goster(self):
-        print("Yurume Modu")
-        print(f"Doğruluk Değeri = {self.dogruluk}")
-
     def process(self):
-        self.th.join()
+        try:
+            self.th.join()
+        except KeyboardInterrupt:
+            self.stop_signal = True
+            print("Mode durduruldu")
